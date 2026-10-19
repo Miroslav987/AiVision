@@ -1,7 +1,6 @@
 import * as tf from '@tensorflow/tfjs';
 import { InferenceEngine, EngineContext } from './engine';
-import { ModelConfig } from '@/types/config';
-import { ModelInfo, InferenceResult, InferenceTimings } from '@/types/inference';
+import { ModelInfo, InferenceResult, InferenceTimings, ModelConfig } from '@/types/inference';
 import { ImagePreprocessor } from '../preprocess';
 import { decodeYOLOv8, decodeYOLOv5, decodeClassification, extractRawTensors } from '../postprocess';
 

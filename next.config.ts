@@ -1,20 +1,24 @@
 import type { NextConfig } from 'next';
 
+// COOP/COEP нужны только для многопоточного WASM. Включаются явно: ENABLE_CROSS_ORIGIN_ISOLATION=true
+const isolation = process.env.ENABLE_CROSS_ORIGIN_ISOLATION === 'true';
+
 const nextConfig: NextConfig = {
+  // Tailwind CSS v4 подключён через Turbopack-лоадер (так его настроил create-next-app). Без этого правила стилей нет.
+  turbopack: {
+    rules: {
+      '*.css': { loaders: ['@tailwindcss/turbopack'], as: '*.css' },
+    },
+  },
   async headers() {
-    // Включаем изоляцию только если это явно запрошено (для многопоточного WASM)
-    if (process.env.ENABLE_CROSS_ORIGIN_ISOLATION === 'true') {
-      return [
-        {
-          source: '/(.*)',
-          headers: [
-            { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
-            { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
-          ],
-        },
-      ];
-    }
-    return [];
+    if (!isolation) return [];
+    return [{
+      source: '/(.*)',
+      headers: [
+        { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+        { key: 'Cross-Origin-Embedder-Policy', value: 'credentialless' },
+      ],
+    }];
   },
 };
 
