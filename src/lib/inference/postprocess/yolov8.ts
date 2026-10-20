@@ -1,3 +1,4 @@
+// src/lib/inference/postprocess/yolov8.ts
 import { Detection, Labels } from '@/types/inference';
 import { DecoderConfig } from '@/types/config';
 import { nonMaxSuppression } from './nms';
@@ -44,8 +45,7 @@ export function decodeYOLOv8(
     const w = output[2 * anchors + a];
     const h = output[3 * anchors + a];
 
-    const modelBox = { x: cx - w / 2, y: cy - h / 2, w, h };
-    const frameBox = modelBoxToFrame(modelBox, t);
+    const frameBox = modelBoxToFrame(cx, cy, w, h, t);
 
     detections.push({
       classId,

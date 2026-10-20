@@ -1,6 +1,7 @@
+// src/lib/inference/engines/onnx.ts
 import * as ort from 'onnxruntime-web';
 import { InferenceEngine, EngineContext } from './engine';
-import { ModelInfo, InferenceResult, InferenceTimings, TaskType, TensorInfo, ModelConfig } from '@/types/inference';
+import { ModelInfo, InferenceResult, InferenceTimings, TensorInfo, ModelConfig, DataType } from '@/types/inference';
 import { ImagePreprocessor } from '../preprocess';
 import { decodeYOLOv8, decodeYOLOv5, decodeClassification, extractRawTensors } from '../postprocess';
 
@@ -51,28 +52,28 @@ export class OnnxEngine implements InferenceEngine {
 
     const outputsInfo: TensorInfo[] = outputNames.map(name => ({
       name,
-      shape: results[name].dims,
-      type: results[name].type as any
+      shape: Array.from(results[name].dims),
+      type: results[name].type as DataType
     }));
 
     // Очистка dummy тензоров
     dummyTensor.dispose();
     Object.values(results).forEach(t => t.dispose());
 
-    this.modelInfo = {
+    const info: ModelInfo = {
       id: crypto.randomUUID(),
       name: ctx.modelUrl.split('/').pop() || 'model.onnx',
       format: 'onnx',
       sizeBytes: 0, // Недоступно напрямую через session
       loadTimeMs: loadTime,
       backend: ep,
-      inputs: [{ name: inputNames[0], shape: dummyTensor.dims, type: 'float32' }],
+      inputs: [{ name: inputNames[0], shape: Array.from(dummyTensor.dims), type: 'float32' }],
       outputs: outputsInfo,
-      labels: ctx.labels
     };
+    this.modelInfo = info;
 
     onProgress(100, 'Готово');
-    return this.modelInfo;
+    return info;
   }
 
   configure(config: ModelConfig): void {
@@ -113,14 +114,14 @@ export class OnnxEngine implements InferenceEngine {
 
     try {
       if (task === 'yolov8') {
-        inferenceResult = { type: 'detection', data: decodeYOLOv8(dataArray, shape, prepResult, this.ctx.config.decoder, this.ctx.labels) };
+        inferenceResult = { type: 'detection', data: decodeYOLOv8(dataArray, shape, prepResult.transform, this.ctx.config.decoder, this.ctx.labels) };
       } else if (task === 'yolov5') {
-        inferenceResult = { type: 'detection', data: decodeYOLOv5(dataArray, shape, prepResult, this.ctx.config.decoder, this.ctx.labels) };
+        inferenceResult = { type: 'detection', data: decodeYOLOv5(dataArray, shape, prepResult.transform, this.ctx.config.decoder, this.ctx.labels) };
       } else if (task === 'classification') {
         inferenceResult = { type: 'classification', data: decodeClassification(dataArray, this.ctx.config.decoder, this.ctx.labels) };
       } else {
-        const rawDict: Record<string, {shape: number[], data: Float32Array}> = {};
-        for (const [k, v] of Object.entries(results)) rawDict[k] = { shape: v.dims.slice(), data: v.data as Float32Array };
+        const rawDict: Record<string, {dims: readonly number[], type: string, data: Float32Array}> = {};
+        for (const [k, v] of Object.entries(results)) rawDict[k] = { dims: Array.from(v.dims), type: v.type, data: v.data as Float32Array };
         inferenceResult = { type: 'raw', data: extractRawTensors(rawDict) };
       }
     } finally {

@@ -1,3 +1,4 @@
+// src/lib/inference/postprocess/yolov5.ts
 import { Detection, Labels } from '@/types/inference';
 import { DecoderConfig } from '@/types/config';
 import { FrameTransform, modelBoxToFrame } from '../geometry';
@@ -51,8 +52,7 @@ export function decodeYOLOv5(
     const w = output[baseIdx + 2];
     const h = output[baseIdx + 3];
 
-    const modelBox = { x: cx - w / 2, y: cy - h / 2, w, h };
-    const frameBox = modelBoxToFrame(modelBox, t);
+    const frameBox = modelBoxToFrame(cx, cy, w, h, t);
 
     detections.push({
       classId,

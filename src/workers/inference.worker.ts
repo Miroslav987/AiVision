@@ -1,9 +1,9 @@
+// src/workers/inference.worker.ts
 import { WorkerRequest, WorkerResponse } from '@/types/worker';
 import { InferenceEngine } from '@/lib/inference/engines/engine';
 import { OnnxEngine } from '@/lib/inference/engines/onnx';
 import { TfjsEngine } from '@/lib/inference/engines/tfjs';
 import { TfliteEngine } from '@/lib/inference/engines/tflite';
-import { RemoteEngine } from '@/lib/inference/engines/remote';
 
 let activeEngine: InferenceEngine | null = null;
 let isBusy = false;
@@ -14,10 +14,6 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
   
   try {
     switch (req.type) {
-      case 'init':
-        send({ type: 'ready', requestId: req.requestId });
-        break;
-
       case 'load':
         isInitializing = true;
         if (activeEngine) {
@@ -58,7 +54,7 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
         isBusy = true;
         try {
           const { result, timings } = await activeEngine.infer(req.bitmap);
-          send({ type: 'result', requestId: req.requestId, result, timings });
+          send({ type: 'result', requestId: req.requestId, result, timings, frame: { width: req.bitmap.width, height: req.bitmap.height } });
         } finally {
           req.bitmap.close();
           isBusy = false;
@@ -87,12 +83,11 @@ self.onmessage = async (e: MessageEvent<WorkerRequest>) => {
     send({ 
       type: 'error', 
       requestId: req.requestId, 
-      message: error instanceof Error ? error.message : 'Неизвестная ошибка воркера',
-      errorDetail: error 
+      message: error instanceof Error ? error.message : 'Неизвестная ошибка воркера'
     });
   }
 };
 
 function send(msg: WorkerResponse, transfer: Transferable[] = []) {
-  self.postMessage(msg, transfer);
+  (self as unknown as { postMessage(m: WorkerResponse, t: Transferable[]): void }).postMessage(msg, transfer);
 }

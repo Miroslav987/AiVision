@@ -1,6 +1,7 @@
+// src/components/model/ModelDropzone.tsx
 "use client";
-import React, { useCallback, useState } from 'react';
-import { UploadCloud, FileJson, FileBinary } from 'lucide-react';
+import React, { useState } from 'react';
+import { UploadCloud } from 'lucide-react';
 import { useToastStore } from '@/store/toastStore';
 import { useModelStore } from '@/store/modelStore';
 import { getGlobalInferenceClient } from '@/lib/inference/clientSingleton';
@@ -45,9 +46,11 @@ export function ModelDropzone() {
     }
   };
 
-  const onDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault(); setIsDragging(false); handleFiles(e.dataTransfer.files);
-  }, []);
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault(); 
+    setIsDragging(false); 
+    handleFiles(e.dataTransfer.files);
+  };
 
   if (isUploading) {
     return (

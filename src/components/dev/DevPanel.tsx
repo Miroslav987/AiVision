@@ -1,3 +1,4 @@
+// src/components/dev/DevPanel.tsx
 "use client";
 import React, { useEffect, useState } from 'react';
 import { useInferenceStore } from '@/store/inferenceStore';
@@ -12,9 +13,9 @@ export function DevPanel() {
     const interval = setInterval(() => {
       // Пример получения памяти, если используется @tensorflow/tfjs
       // Так как tf загружен только в воркере, на клиенте мы можем измерить только общий heap, если браузер позволяет.
-      if ((performance as any).memory) {
-        const mem = (performance as any).memory;
-        setMemory(`${Math.round(mem.usedJSHeapSize / 1048576)} MB`);
+      const perf = performance as unknown as { memory?: { usedJSHeapSize: number } };
+      if (perf.memory) {
+        setMemory(`${Math.round(perf.memory.usedJSHeapSize / 1048576)} MB`);
       }
     }, 1000);
     return () => clearInterval(interval);

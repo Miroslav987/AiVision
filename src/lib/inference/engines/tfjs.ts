@@ -1,6 +1,7 @@
+// src/lib/inference/engines/tfjs.ts
 import * as tf from '@tensorflow/tfjs';
 import { InferenceEngine, EngineContext } from './engine';
-import { ModelInfo, InferenceResult, InferenceTimings, ModelConfig } from '@/types/inference';
+import { ModelInfo, InferenceResult, InferenceTimings, ModelConfig, EngineBackend } from '@/types/inference';
 import { ImagePreprocessor } from '../preprocess';
 import { decodeYOLOv8, decodeYOLOv5, decodeClassification, extractRawTensors } from '../postprocess';
 
@@ -9,7 +10,6 @@ export class TfjsEngine implements InferenceEngine {
   private ctx: EngineContext | null = null;
   private preprocessor = new ImagePreprocessor();
   private modelInfo: ModelInfo | null = null;
-  private isGraphModel = false;
 
   async init(): Promise<void> {
     await tf.ready();
@@ -29,7 +29,7 @@ export class TfjsEngine implements InferenceEngine {
           activeBackend = b;
           break;
         }
-      } catch (e) { /* Игнорируем недоступные */ }
+      } catch { /* Игнорируем недоступные */ }
     }
 
     onProgress(30, `Загрузка модели через ${activeBackend}...`);
@@ -38,10 +38,8 @@ export class TfjsEngine implements InferenceEngine {
     try {
       if (ctx.format === 'tfjs-graph') {
         this.model = await tf.loadGraphModel(ctx.modelUrl, { onProgress: (frac) => onProgress(30 + frac * 50, 'Загрузка весов...') });
-        this.isGraphModel = true;
       } else {
         this.model = await tf.loadLayersModel(ctx.modelUrl, { onProgress: (frac) => onProgress(30 + frac * 50, 'Загрузка весов...') });
-        this.isGraphModel = false;
       }
     } catch (e) {
       throw new Error(`Ошибка загрузки TFJS: ${e instanceof Error ? e.message : String(e)}`);
@@ -58,20 +56,20 @@ export class TfjsEngine implements InferenceEngine {
     });
     dummyTensor.dispose();
 
-    this.modelInfo = {
+    const info: ModelInfo = {
       id: crypto.randomUUID(),
       name: 'TF.js Model',
       format: ctx.format,
       sizeBytes: 0,
       loadTimeMs,
-      backend: activeBackend as any,
+      backend: activeBackend as EngineBackend,
       inputs: [{ name: 'input', shape: [1, ctx.config.preprocess.inputHeight, ctx.config.preprocess.inputWidth, 3], type: 'float32' }],
       outputs: [{ name: 'output', shape: outShape, type: 'float32' }],
-      labels: ctx.labels
     };
+    this.modelInfo = info;
 
     onProgress(100, 'Готово');
-    return this.modelInfo;
+    return info;
   }
 
   configure(config: ModelConfig): void {
@@ -83,8 +81,6 @@ export class TfjsEngine implements InferenceEngine {
     const timings = { preprocessMs: 0, inferenceMs: 0, postprocessMs: 0 };
     
     let start = performance.now();
-    // Обрати внимание: для TF.js удобнее использовать tf.browser.fromPixels, но мы уже написали унифицированный preprocessor.
-    // Если layout NCHW, TF.js обычно требует NHWC. Оставим наш preprocessor, он делает всё.
     const prepResult = this.preprocessor.process(bitmap, this.ctx.config.preprocess);
     
     // TF.js Inference оборачивается в tf.tidy для очистки промежуточных тензоров
@@ -111,13 +107,13 @@ export class TfjsEngine implements InferenceEngine {
     const task = this.ctx.config.task;
 
     if (task === 'yolov8') {
-      inferenceResult = { type: 'detection', data: decodeYOLOv8(dataArray, shape, prepResult, this.ctx.config.decoder, this.ctx.labels) };
+      inferenceResult = { type: 'detection', data: decodeYOLOv8(dataArray, shape, prepResult.transform, this.ctx.config.decoder, this.ctx.labels) };
     } else if (task === 'yolov5') {
-      inferenceResult = { type: 'detection', data: decodeYOLOv5(dataArray, shape, prepResult, this.ctx.config.decoder, this.ctx.labels) };
+      inferenceResult = { type: 'detection', data: decodeYOLOv5(dataArray, shape, prepResult.transform, this.ctx.config.decoder, this.ctx.labels) };
     } else if (task === 'classification') {
       inferenceResult = { type: 'classification', data: decodeClassification(dataArray, this.ctx.config.decoder, this.ctx.labels) };
     } else {
-      inferenceResult = { type: 'raw', data: { output: { shape, values: dataArray.slice(0, 100) } } };
+      inferenceResult = { type: 'raw', data: extractRawTensors({ output: { dims: shape, type: 'float32', data: dataArray } }) };
     }
     timings.postprocessMs = performance.now() - start;
 

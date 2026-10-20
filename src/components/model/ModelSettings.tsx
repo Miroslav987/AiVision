@@ -1,15 +1,21 @@
+// src/components/model/ModelSettings.tsx
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useModelStore } from '@/store/modelStore';
 import { ChevronDown, ChevronRight, Save } from 'lucide-react';
+import { TaskType, EngineBackend } from '@/types/inference';
 
 export function ModelSettings() {
   const { config, setConfig, modelInfo } = useModelStore();
   const [local, setLocal] = useState(config);
+  const [prevConfig, setPrevConfig] = useState(config);
   const [openSections, setOpenSections] = useState({ task: true, prep: false, post: false });
 
-  // Синхронизация при загрузке новой модели
-  useEffect(() => { setLocal(config); }, [config]);
+  // Синхронизация при загрузке новой модели (derived state pattern)
+  if (config !== prevConfig) {
+    setPrevConfig(config);
+    setLocal(config);
+  }
 
   // Проверка: требуют ли изменения перезапуска сессии
   const needsReload = 
@@ -54,7 +60,7 @@ export function ModelSettings() {
             <div className="p-3 grid grid-cols-2 gap-3 bg-bg-surface">
               <div>
                 <label className={labelClass}>Тип задачи</label>
-                <select className={inputClass} value={local.task} onChange={e => setLocal({...local, task: e.target.value as any})}>
+                <select className={inputClass} value={local.task} onChange={e => setLocal({...local, task: e.target.value as TaskType})}>
                   <option value="auto">Автоопределение</option>
                   <option value="yolov8">YOLOv8 / YOLO11</option>
                   <option value="yolov5">YOLOv5</option>
@@ -64,7 +70,7 @@ export function ModelSettings() {
               </div>
               <div>
                 <label className={labelClass}>Бэкенд (Preferred)</label>
-                <select className={inputClass} value={local.preferredBackend} onChange={e => setLocal({...local, preferredBackend: e.target.value as any})}>
+                <select className={inputClass} value={local.preferredBackend} onChange={e => setLocal({...local, preferredBackend: e.target.value as EngineBackend})}>
                   <option value="webgpu">WebGPU</option>
                   <option value="wasm">WASM (CPU)</option>
                   <option value="webgl">WebGL</option>
@@ -91,7 +97,7 @@ export function ModelSettings() {
               </div>
               <div>
                 <label className={labelClass}>Раскладка</label>
-                <select className={inputClass} value={local.preprocess.layout} onChange={e => setLocal({...local, preprocess: {...local.preprocess, layout: e.target.value as any}})}>
+                <select className={inputClass} value={local.preprocess.layout} onChange={e => setLocal({...local, preprocess: {...local.preprocess, layout: e.target.value as 'NCHW' | 'NHWC'}})}>
                   <option value="NCHW">NCHW</option>
                   <option value="NHWC">NHWC</option>
                 </select>

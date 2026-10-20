@@ -1,3 +1,4 @@
+// src/hooks/useVideoSource.ts
 import { useEffect, useState, RefObject } from 'react';
 import Hls from 'hls.js';
 import { useVideoStore } from '@/store/videoStore';
@@ -30,7 +31,7 @@ export function useVideoSource(videoRef: RefObject<HTMLVideoElement | null>) {
   };
 
   useEffect(() => {
-    fetchCameras();
+    window.setTimeout(fetchCameras, 0);
     navigator.mediaDevices.addEventListener('devicechange', fetchCameras);
     return () => navigator.mediaDevices.removeEventListener('devicechange', fetchCameras);
   }, []);

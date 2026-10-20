@@ -1,4 +1,4 @@
-import { PreprocessConfig, DecoderConfig } from '@/types/config';
+// src/lib/inference/engines/engine.ts
 import { ModelInfo, InferenceResult, InferenceTimings, ModelFormat, ModelConfig } from '@/types/inference';
 
 export interface EngineContext {

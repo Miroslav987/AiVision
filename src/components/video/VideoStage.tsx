@@ -1,9 +1,9 @@
+// src/components/video/VideoStage.tsx
 "use client";
 
 import React, { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { useVideoStore } from '@/store/videoStore';
 import { useInferenceStore } from '@/store/inferenceStore';
-import { useModelStore } from '@/store/modelStore';
 
 function getClassColor(classId: number): string {
   const hue = (classId * 137.508) % 360;
@@ -15,7 +15,7 @@ export interface VideoStageRef {
   captureSnapshot: () => void;
 }
 
-export const VideoStage = forwardRef<VideoStageRef, {}>((props, ref) => {
+export const VideoStage = forwardRef<VideoStageRef, Record<string, never>>((props, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -27,7 +27,6 @@ export const VideoStage = forwardRef<VideoStageRef, {}>((props, ref) => {
   useImperativeHandle(ref, () => ({
     video: videoRef.current,
     captureSnapshot: () => {
-      // ... логика снапшота без изменений ...
       if (!videoRef.current || !lastResult) return;
       const v = videoRef.current;
       const oc = document.createElement('canvas');

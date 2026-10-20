@@ -1,3 +1,4 @@
+// src/components/analysis/LiveCharts.tsx
 "use client";
 import React, { useEffect, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
@@ -23,7 +24,7 @@ export function LiveCharts() {
       <div className="flex-1 min-h-0">
         <div className="text-xs text-text-muted mb-2 font-medium">Задержка инференса (мс)</div>
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} isAnimationActive={false}>
+          <LineChart data={data}>
             <CartesianGrid strokeDasharray="3 3" stroke="#2b303b" vertical={false} />
             <XAxis dataKey="timestamp" hide />
             <YAxis width={30} tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />

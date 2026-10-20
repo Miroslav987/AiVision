@@ -1,8 +1,10 @@
+// src/app/page.tsx
 "use client";
 import React, { useRef } from "react";
 import dynamic from "next/dynamic";
 import { Header } from "@/components/shared/Header";
 import { ToastContainer } from "@/components/shared/ToastContainer";
+import type { VideoStageRef } from "@/components/video/VideoStage";
 
 const VideoStageWrap = dynamic(() => import("@/components/video/VideoStage").then(m => m.VideoStage), { ssr: false });
 const PlaybackControlsWrap = dynamic(() => import("@/components/video/PlaybackControls").then(m => m.PlaybackControls), { ssr: false });
@@ -13,7 +15,7 @@ const IntegrationEngineWrap = dynamic(() => import("@/components/IntegrationEngi
 const DevPanelWrap = dynamic(() => import("@/components/dev/DevPanel").then(m => m.DevPanel), { ssr: false });
 
 export default function DashboardPage() {
-  const videoStageRef = useRef<{ video: HTMLVideoElement | null, captureSnapshot: () => void }>(null);
+  const videoStageRef = useRef<VideoStageRef>(null);
   
   // Для того чтобы SourcePicker и Capture могли обратиться напрямую к тегу <video>
   const videoRefProxy = {
@@ -34,7 +36,7 @@ export default function DashboardPage() {
             <PlaybackControlsWrap videoRef={videoRefProxy} onSnapshot={() => videoStageRef.current?.captureSnapshot()} />
           </div>
           <div className="flex-1 min-h-0">
-            <AnalysisTabsWrap videoNode={<VideoStageWrap ref={videoStageRef as any} />} />
+            <AnalysisTabsWrap videoNode={<VideoStageWrap ref={videoStageRef} />} />
           </div>
         </section>
 

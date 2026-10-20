@@ -1,7 +1,8 @@
-import { WorkerRequest, WorkerResponse } from '@/types/worker';
+// src/lib/inference/client.ts
+import { WorkerRequest, WorkerResponse, DistributiveOmit } from '@/types/worker';
 import { ModelConfig, ModelFormat, ModelInfo, InferenceResult, InferenceTimings } from '@/types/inference';
 
-type PromiseResolvers = { resolve: (val: any) => void, reject: (err: any) => void, timeout?: ReturnType<typeof setTimeout> };
+type PromiseResolvers = { resolve: (val: unknown) => void, reject: (err: unknown) => void, timeout?: ReturnType<typeof setTimeout> };
 
 export class InferenceClient {
   private worker: Worker | null = null;
@@ -38,7 +39,7 @@ export class InferenceClient {
     }
   }
 
-  private send<T>(req: Omit<WorkerRequest, 'requestId'>, transfer: Transferable[] = [], timeoutMs = 30000): Promise<T> {
+  private send<T>(req: DistributiveOmit<WorkerRequest, 'requestId'>, transfer: Transferable[] = [], timeoutMs = 30000): Promise<T> {
     if (!this.worker) throw new Error('Worker не инициализирован');
     
     return new Promise((resolve, reject) => {

@@ -1,10 +1,11 @@
+// src/types/worker.ts
 import type {
-  EngineConfig, FrameSize, InferenceResult, InferenceTimings, Labels, ModelFormat, ModelInfo,
+  ModelConfig, FrameSize, InferenceResult, InferenceTimings, Labels, ModelFormat, ModelInfo,
 } from './inference';
 
 export type WorkerRequest =
-  | { type: 'load'; requestId: string; files: File[]; format: ModelFormat; config: EngineConfig; labels?: Labels }
-  | { type: 'configure'; requestId: string; config: EngineConfig; labels?: Labels }
+  | { type: 'load'; requestId: string; modelUrl: string; format: ModelFormat; config: ModelConfig; labels?: Labels }
+  | { type: 'configure'; requestId: string; config: ModelConfig; labels?: Labels }
   | { type: 'infer'; requestId: string; bitmap: ImageBitmap }
   | { type: 'unload'; requestId: string }
   | { type: 'dispose'; requestId: string };
