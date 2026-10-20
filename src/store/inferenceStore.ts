@@ -1,11 +1,11 @@
+// src/store/inferenceStore.ts
 import { create } from 'zustand';
-import { InferenceResult, InferenceTimings } from '@/types/inference';
+import { InferenceResult, InferenceTimings, FrameSize } from '@/types/inference';
 
 export interface ChartPoint {
-  timestamp: number; // Unix Epoch в секундах
-  fpsInference: number;
+  timestamp: number;
   inferenceMs: number;
-  objectCounts: Record<string, number>;
+  objects: number;
 }
 
 interface InferenceState {
@@ -13,14 +13,17 @@ interface InferenceState {
   fpsVideo: number;
   fpsInference: number;
   lastResult: InferenceResult | null;
+  lastFrame: FrameSize | null;
   timings: InferenceTimings | null;
-  history: ChartPoint[]; // Буфер на 60 элементов (посекундная агрегация)
+  history: ChartPoint[];
   
   setInferringState: (isInferring: boolean) => void;
   setFpsVideo: (fps: number) => void;
-  addResult: (result: InferenceResult, timings: InferenceTimings, fpsInf: number) => void;
+  addResult: (result: InferenceResult, timings: InferenceTimings, frame: FrameSize) => void;
+  clearResults: () => void;
 }
 
+let inferenceTimestamps: number[] = [];
 const HISTORY_MAX_SECONDS = 60;
 
 export const useInferenceStore = create<InferenceState>((set) => ({
@@ -28,46 +31,59 @@ export const useInferenceStore = create<InferenceState>((set) => ({
   fpsVideo: 0,
   fpsInference: 0,
   lastResult: null,
+  lastFrame: null,
   timings: null,
   history: [],
 
   setInferringState: (isInferring) => set({ isInferring }),
   setFpsVideo: (fps) => set({ fpsVideo: fps }),
   
-  addResult: (result, timings, fpsInf) => set((state) => {
-    const currentSecond = Math.floor(Date.now() / 1000);
-    const newHistory = [...state.history];
-    const lastPoint = newHistory[newHistory.length - 1];
+  clearResults: () => {
+    inferenceTimestamps = [];
+    set({ lastResult: null, lastFrame: null, fpsInference: 0, history: [], timings: null });
+  },
 
-    const objectCounts: Record<string, number> = {};
+  addResult: (result, timings, frame) => set((state) => {
+    const now = Date.now();
+    const currentSecond = Math.floor(now / 1000);
+    
+    // FPS Инференса (количество завершенных инференсов за последнюю секунду)
+    inferenceTimestamps.push(now);
+    inferenceTimestamps = inferenceTimestamps.filter(t => now - t <= 1000);
+    const fpsInference = inferenceTimestamps.length;
+
+    let objectsCount = 0;
     if (result.type === 'detection') {
-      result.data.forEach((d) => {
-        objectCounts[d.className] = (objectCounts[d.className] || 0) + 1;
-      });
+      objectsCount = result.data.length;
+    } else if (result.type === 'classification') {
+      objectsCount = result.data.length > 0 ? 1 : 0;
     }
 
+    const newHistory = [...state.history];
+    const lastPoint = newHistory.length > 0 ? newHistory[newHistory.length - 1] : null;
+
     if (lastPoint && lastPoint.timestamp === currentSecond) {
-      // Обновляем текущую секунду (усредняем метрики или берем последние)
-      lastPoint.fpsInference = fpsInf;
-      lastPoint.inferenceMs = timings.inferenceMs;
-      lastPoint.objectCounts = objectCounts;
+      // Обновляем текущую секунду, не мутируя старый объект
+      newHistory[newHistory.length - 1] = {
+        ...lastPoint,
+        inferenceMs: timings.inferenceMs,
+        objects: objectsCount,
+      };
     } else {
-      // Добавляем новую секунду
       newHistory.push({
         timestamp: currentSecond,
-        fpsInference: fpsInf,
         inferenceMs: timings.inferenceMs,
-        objectCounts,
+        objects: objectsCount,
       });
-      // Соблюдаем размер буфера
       if (newHistory.length > HISTORY_MAX_SECONDS) {
         newHistory.shift();
       }
     }
 
     return {
-      fpsInference: fpsInf,
+      fpsInference,
       lastResult: result,
+      lastFrame: frame,
       timings,
       history: newHistory,
     };

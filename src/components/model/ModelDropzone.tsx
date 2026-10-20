@@ -5,7 +5,7 @@ import { UploadCloud } from 'lucide-react';
 import { useToastStore } from '@/store/toastStore';
 import { useModelStore } from '@/store/modelStore';
 import { getGlobalInferenceClient } from '@/lib/inference/clientSingleton';
-import { ModelFormat } from '@/types/inference';
+import { ModelFormat, EngineConfig } from '@/types/inference';
 
 export function ModelDropzone() {
   const [isDragging, setIsDragging] = useState(false);
@@ -20,11 +20,9 @@ export function ModelDropzone() {
 
     const onnxFile = fileArray.find(f => f.name.endsWith('.onnx'));
     let format: ModelFormat = 'unsupported';
-    let url = '';
 
     if (onnxFile) {
       format = 'onnx';
-      url = URL.createObjectURL(onnxFile);
     } else {
       addToast('error', 'Пока поддерживается только загрузка .onnx моделей.');
       return;
@@ -35,7 +33,9 @@ export function ModelDropzone() {
       const client = getGlobalInferenceClient();
       client.onProgress = (p, msg) => setProgressMsg(`${p}% - ${msg}`);
       
-      const info = await client.load(url, format, config);
+      // На этапе загрузки 'auto' еще не разрешен, но мы кастуем для прохождения типа, 
+      // воркеру config.task на этапе загрузки не важен.
+      const info = await client.load([onnxFile], format, config as EngineConfig);
       setActiveModel(info.id, info);
       addToast('success', `Модель ${info.name} успешно загружена и готова к инференсу!`);
     } catch (e) {

@@ -1,89 +1,77 @@
-import { useEffect, useRef } from 'react';
+// src/hooks/useFrameCapture.ts
+import { useEffect } from 'react';
 import { useInferenceStore } from '@/store/inferenceStore';
 import { useModelStore } from '@/store/modelStore';
 
-type ProcessFrameFn = (bitmap: ImageBitmap) => Promise<void>;
-
 export function useFrameCapture(
-  videoRef: React.RefObject<HTMLVideoElement | null>,
-  processFrame: ProcessFrameFn,
-  isActive: boolean
-) {
-  const { maxFps } = useModelStore((s) => s.config);
-  const setFpsVideo = useInferenceStore((s) => s.setFpsVideo);
-  
-  const isProcessingRef = useRef(false);
-  const lastTimeRef = useRef(0);
-  const frameTimesRef = useRef<number[]>([]);
-  const requestRef = useRef<number | null>(null);
-
+  video: HTMLVideoElement | null,
+  processFrame: (bitmap: ImageBitmap) => Promise<void>,
+  active: boolean
+): void {
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !isActive) return;
+    if (!video || !active) return;
 
     let stopped = false;
+    let requestRef: number;
+    let lastTime = 0;
+    let frames = 0;
+    let lastFpsTime = performance.now();
+    let busy = false;
 
-    const captureLoop = async (now: number) => {
+    const setFpsVideo = useInferenceStore.getState().setFpsVideo;
+
+    const loop = async (now: number) => {
       if (stopped) return;
 
-      // Считаем FPS видео
-      frameTimesRef.current.push(now);
-      const oneSecAgo = now - 1000;
-      frameTimesRef.current = frameTimesRef.current.filter((t) => t > oneSecAgo);
-      setFpsVideo(frameTimesRef.current.length);
-
-      const timeSinceLast = now - lastTimeRef.current;
-      const minInterval = 1000 / maxFps;
-
-      // Если воркер занят или не прошло нужное время (ограничение FPS)
-      if (isProcessingRef.current || timeSinceLast < minInterval) {
-        scheduleNext();
-        return;
+      frames++;
+      if (now - lastFpsTime >= 1000) {
+        setFpsVideo(Math.round((frames * 1000) / (now - lastFpsTime)));
+        frames = 0;
+        lastFpsTime = now;
       }
 
-      // Проверяем готовность видео
-      if (video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0) {
+      const maxFps = useModelStore.getState().config.maxFps;
+      const interval = 1000 / maxFps;
+
+      if (!busy && (now - lastTime >= interval) && video.readyState >= 2 && video.videoWidth > 0) {
+        busy = true;
+        lastTime = now;
         try {
-          isProcessingRef.current = true;
-          lastTimeRef.current = now;
-          
-          // Создаем ImageBitmap для zero-copy transfer в Worker
           const bitmap = await createImageBitmap(video);
-          
-          // ВАЖНО: Мы не ждём ответа, чтобы не блокировать цикл захвата.
-          // Внутри processFrame воркер ответит асинхронно, а пока isProcessingRef = true, кадры сбрасываются.
-          processFrame(bitmap).finally(() => {
-            isProcessingRef.current = false;
-          });
+          if (stopped) {
+            bitmap.close();
+          } else {
+            await processFrame(bitmap);
+          }
         } catch (e) {
-          console.error('Ошибка создания ImageBitmap:', e);
-          isProcessingRef.current = false;
+          console.error(e);
+        } finally {
+          busy = false;
         }
       }
 
-      scheduleNext();
+      schedule();
     };
 
-    const scheduleNext = () => {
+    const schedule = () => {
       if (stopped) return;
       if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
-        requestRef.current = video.requestVideoFrameCallback((_now, metadata) => captureLoop(metadata.expectedDisplayTime));
+        requestRef = (video as any).requestVideoFrameCallback((now: number, meta: any) => loop(meta.expectedDisplayTime));
       } else {
-        requestRef.current = requestAnimationFrame((now) => captureLoop(now));
+        requestRef = requestAnimationFrame(loop);
       }
     };
 
-    scheduleNext();
+    schedule();
 
     return () => {
       stopped = true;
-      if (requestRef.current !== null) {
-        if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
-          video.cancelVideoFrameCallback(requestRef.current);
-        } else {
-          cancelAnimationFrame(requestRef.current);
-        }
+      if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+        (video as any).cancelVideoFrameCallback(requestRef);
+      } else {
+        cancelAnimationFrame(requestRef);
       }
+      setFpsVideo(0);
     };
-  }, [isActive, maxFps, videoRef, processFrame, setFpsVideo]);
+  }, [video, processFrame, active]);
 }

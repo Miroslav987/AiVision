@@ -1,3 +1,4 @@
+// src/lib/inference/clientSingleton.ts
 import { InferenceClient } from './client';
 
 let instance: InferenceClient | null = null;

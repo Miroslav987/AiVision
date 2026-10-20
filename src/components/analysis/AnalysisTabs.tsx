@@ -1,8 +1,10 @@
+// src/components/analysis/AnalysisTabs.tsx
 "use client";
 import React, { useState } from 'react';
 import { MetricsGrid } from './MetricsGrid';
 import { LiveCharts } from './LiveCharts';
 import { EventLog } from './EventLog';
+import { RawOutputViewer } from './RawOutputViewer'; // Импортируем новый компонент
 import { ErrorBoundary } from '../shared/ErrorBoundary';
 
 export function AnalysisTabs({ videoNode }: { videoNode: React.ReactNode }) {
@@ -11,7 +13,7 @@ export function AnalysisTabs({ videoNode }: { videoNode: React.ReactNode }) {
   return (
     <div className="h-full flex flex-col gap-4">
       {/* На десктопе видео всегда видно, на мобильных скрывается вкладками. */}
-      <div className={`shrink-0 lg:h-[55%] ${tab === 'video' ? 'block' : 'hidden lg:block'}`}>
+      <div className={`${tab === 'video' ? 'block' : 'hidden'} lg:block h-[45vh] lg:h-auto lg:flex-[3] min-h-0 shrink-0`}>
         <ErrorBoundary title="Видеоплеер">{videoNode}</ErrorBoundary>
       </div>
 
@@ -19,13 +21,13 @@ export function AnalysisTabs({ videoNode }: { videoNode: React.ReactNode }) {
         <MetricsGrid />
       </ErrorBoundary>
 
-      <div className="flex bg-bg-surface p-1 rounded-lg border border-border-subtle shrink-0">
+      <div className={`flex bg-bg-surface p-1 rounded-lg border border-border-subtle shrink-0 ${tab === 'video' ? 'hidden lg:flex' : 'flex'}`}>
         {(['video', 'charts', 'log', 'raw'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-colors ${
-              (tab === t && window.innerWidth < 1024) || (t === tab && t !== 'video') 
+              tab === t
                 ? 'bg-bg-base text-text-main shadow-sm' 
                 : 'text-text-muted hover:text-text-main'
             } ${t === 'video' ? 'lg:hidden' : ''}`}
@@ -35,10 +37,10 @@ export function AnalysisTabs({ videoNode }: { videoNode: React.ReactNode }) {
         ))}
       </div>
 
-      <div className="flex-1 min-h-0 bg-bg-surface border border-border-subtle rounded-xl p-4">
+      <div className={`${tab === 'video' ? 'hidden lg:block' : 'block'} flex-[2] min-h-[220px] bg-bg-surface border border-border-subtle rounded-xl p-4`}>
         {tab === 'charts' && <ErrorBoundary title="Графики"><LiveCharts /></ErrorBoundary>}
         {tab === 'log' && <ErrorBoundary title="Журнал"><EventLog /></ErrorBoundary>}
-        {tab === 'raw' && <div className="text-sm text-text-muted h-full flex items-center justify-center">Сырой вывод доступен, если задача = raw (раздел в разработке)</div>}
+        {tab === 'raw' && <ErrorBoundary title="Сырой вывод"><RawOutputViewer /></ErrorBoundary>}
       </div>
     </div>
   );

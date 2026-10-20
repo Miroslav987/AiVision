@@ -1,165 +1,199 @@
 // src/hooks/useVideoSource.ts
-import { useEffect, useState, RefObject } from 'react';
+import { useEffect } from 'react';
 import Hls from 'hls.js';
 import { useVideoStore } from '@/store/videoStore';
+import { useInferenceStore } from '@/store/inferenceStore';
 
-type Status = 'idle' | 'requesting' | 'ready' | 'playing' | 'error';
+export function useVideoSource(video: HTMLVideoElement | null): void {
+  const { sourceType, sourceUrl, deviceId, sourceVersion } = useVideoStore();
 
-export function useVideoSource(videoRef: RefObject<HTMLVideoElement | null>) {
-  const { sourceType, sourceUrl, deviceId, setIsPlaying, setResolution } = useVideoStore();
-  const [status, setStatus] = useState<Status>('idle');
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
-
-  // Получение списка камер (с запросом прав, если имена скрыты)
-  const fetchCameras = async () => {
-    try {
-      let devs = await navigator.mediaDevices.enumerateDevices();
-      let videoDevs = devs.filter((d) => d.kind === 'videoinput');
-      
-      // Если метки пустые, значит нет разрешения. Запрашиваем временное.
-      if (videoDevs.length > 0 && !videoDevs[0].label) {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        devs = await navigator.mediaDevices.enumerateDevices();
-        videoDevs = devs.filter((d) => d.kind === 'videoinput');
-        stream.getTracks().forEach((t) => t.stop()); // Сразу закрываем
-      }
-      setDevices(videoDevs);
-    } catch (e) {
-      console.warn('Не удалось получить список устройств:', e);
-    }
-  };
-
+  // Эффект 1: Обновление списка камер без запроса разрешений
   useEffect(() => {
-    window.setTimeout(fetchCameras, 0);
+    const fetchCameras = async () => {
+      try {
+        const devs = await navigator.mediaDevices.enumerateDevices();
+        useVideoStore.getState().setDevices(devs.filter((d) => d.kind === 'videoinput'));
+      } catch (e) {
+        console.warn('Не удалось получить список устройств:', e);
+      }
+    };
+
+    fetchCameras();
     navigator.mediaDevices.addEventListener('devicechange', fetchCameras);
     return () => navigator.mediaDevices.removeEventListener('devicechange', fetchCameras);
   }, []);
 
-  // Основная логика переключения источников
+  // Эффект 2: Управление источником видео
   useEffect(() => {
-    const video = videoRef.current;
     if (!video) return;
 
-    let hls: Hls | null = null;
+    useInferenceStore.getState().clearResults();
+
+    let cancelled = false;
+    const ac = new AbortController();
     let stream: MediaStream | null = null;
+    let hls: Hls | null = null;
 
     const cleanup = () => {
+      cancelled = true;
+      ac.abort();
       if (hls) {
         hls.destroy();
         hls = null;
       }
       if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
+        stream.getTracks().forEach((t) => t.stop());
         stream = null;
       }
-      if (video.srcObject) video.srcObject = null;
+      video.pause();
+      video.srcObject = null;
       video.removeAttribute('src');
+      video.removeAttribute('crossorigin');
       video.load();
-      setStatus('idle');
-      setErrorMsg(null);
+    };
+
+    const playVideo = async () => {
+      try {
+        await video.play();
+      } catch (e) {
+        if (e instanceof DOMException && e.name === 'AbortError') {
+          // Игнорируем прерывание загрузки
+          return;
+        }
+        useVideoStore.getState().setStatus('error', `Ошибка воспроизведения: ${e instanceof Error ? e.message : 'Неизвестная ошибка'}`);
+      }
     };
 
     const setupCamera = async () => {
       try {
-        setStatus('requesting');
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: deviceId ? { deviceId: { exact: deviceId } } : true,
-          audio: false,
-        });
+        useVideoStore.getState().setStatus('requesting');
         
-        // Обработка физического отключения камеры
-        stream.getVideoTracks()[0].onended = () => {
-          setErrorMsg('Камера была отключена');
-          setStatus('error');
-          setIsPlaying(false);
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error('Браузер не даёт доступ к камере (нужен HTTPS или localhost)');
+        }
+
+        const constraints: MediaStreamConstraints = {
+          video: deviceId ? { deviceId: { exact: deviceId } } : { width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: false,
         };
 
-        video.srcObject = stream;
-        video.crossOrigin = 'anonymous';
-        await video.play();
-        setStatus('playing');
-      } catch (err: unknown) {
-        if (err instanceof DOMException) {
-          if (err.name === 'NotAllowedError') setErrorMsg('Нет разрешения на использование камеры');
-          else if (err.name === 'NotReadableError') setErrorMsg('Камера занята другим приложением или недоступна');
-          else setErrorMsg(`Ошибка камеры: ${err.message}`);
-        } else {
-          setErrorMsg('Неизвестная ошибка камеры');
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+
+        if (cancelled) {
+          stream.getTracks().forEach(t => t.stop());
+          return;
         }
-        setStatus('error');
+
+        stream.getVideoTracks()[0].addEventListener('ended', () => {
+          useVideoStore.getState().setStatus('error', 'Камера была отключена');
+        }, { signal: ac.signal });
+
+        video.srcObject = stream;
+        
+        // Обновляем список, так как теперь есть разрешения (появятся названия)
+        const devs = await navigator.mediaDevices.enumerateDevices();
+        useVideoStore.getState().setDevices(devs.filter((d) => d.kind === 'videoinput'));
+        
+        playVideo();
+      } catch (err: unknown) {
+        let msg = 'Неизвестная ошибка камеры';
+        if (err instanceof Error || err instanceof DOMException) {
+          if (err.name === 'NotAllowedError') msg = 'Нет разрешения на использование камеры';
+          else if (err.name === 'NotReadableError') msg = 'Камера занята другим приложением или недоступна';
+          else if (err.name === 'NotFoundError' || err.name === 'OverconstrainedError') msg = 'Камера не найдена';
+          else msg = err.message;
+        }
+        useVideoStore.getState().setStatus('error', msg);
       }
     };
 
-    const setupUrlOrFile = async () => {
+    const setupUrlOrFile = () => {
       if (!sourceUrl) return;
-      setStatus('requesting');
-      video.crossOrigin = 'anonymous'; // Критично для Canvas и Web Worker
+      
+      useVideoStore.getState().setStatus('requesting');
+      video.crossOrigin = 'anonymous';
+
+      video.addEventListener('error', () => {
+        const errCode = video.error?.code;
+        let msg = 'Неизвестная ошибка воспроизведения';
+        if (errCode === MediaError.MEDIA_ERR_DECODE) msg = 'Формат видео не поддерживается';
+        else if (errCode === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) msg = 'Не удалось загрузить видео (проверьте URL и CORS)';
+        useVideoStore.getState().setStatus('error', msg);
+      }, { signal: ac.signal });
+
+      video.addEventListener('loadeddata', () => {
+        useVideoStore.getState().setStatus('ready');
+        playVideo();
+      }, { signal: ac.signal });
 
       if (sourceUrl.includes('.m3u8')) {
-        if (Hls.isSupported()) {
-          hls = new Hls({ maxMaxBufferLength: 30 }); // Снижаем буферизацию для live
+        if (video.canPlayType('application/vnd.apple.mpegurl')) {
+          video.src = sourceUrl;
+        } else if (Hls.isSupported()) {
+          hls = new Hls({ maxMaxBufferLength: 30 });
           hls.loadSource(sourceUrl);
           hls.attachMedia(video);
-          hls.on(Hls.Events.MANIFEST_PARSED, () => {
-            setStatus('ready');
-            video.play().catch(() => {});
-          });
           hls.on(Hls.Events.ERROR, (_, data) => {
             if (data.fatal) {
-              setErrorMsg('Ошибка воспроизведения HLS (возможно, проблема с CORS или форматом)');
-              setStatus('error');
+              useVideoStore.getState().setStatus('error', 'Ошибка HLS-потока (CORS, сеть или формат)');
             }
           });
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-          // Native Safari
-          video.src = sourceUrl;
-          video.addEventListener('loadedmetadata', () => setStatus('ready'), { once: true });
         } else {
-          setErrorMsg('HLS не поддерживается в этом браузере');
-          setStatus('error');
+          useVideoStore.getState().setStatus('error', 'HLS не поддерживается в этом браузере');
         }
       } else {
-        // Обычный файл или URL
         video.src = sourceUrl;
-        video.onerror = () => {
-          const err = video.error;
-          if (err?.code === MediaError.MEDIA_ERR_DECODE) setErrorMsg('Формат видео не поддерживается');
-          else if (err?.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) setErrorMsg('Не удалось загрузить видео (проверьте URL и CORS)');
-          else setErrorMsg('Неизвестная ошибка воспроизведения');
-          setStatus('error');
-        };
-        video.addEventListener('canplay', () => setStatus('ready'), { once: true });
       }
     };
 
     cleanup();
 
-    if (sourceType === 'camera') setupCamera();
-    else if ((sourceType === 'file' || sourceType === 'url') && sourceUrl) setupUrlOrFile();
+    if (sourceType === 'camera') {
+      setupCamera();
+    } else if (sourceUrl) {
+      setupUrlOrFile();
+    } else {
+      useVideoStore.getState().setStatus('idle');
+    }
 
     return cleanup;
-  }, [sourceType, sourceUrl, deviceId, videoRef, setIsPlaying]);
+  }, [video, sourceType, sourceUrl, deviceId, sourceVersion]);
 
-  // Синхронизация статусов с Zustand
+  // Эффект 3: Синхронизация событий плеера
   useEffect(() => {
-    const video = videoRef.current;
     if (!video) return;
 
-    const onPlay = () => { setStatus('playing'); setIsPlaying(true); };
-    const onPause = () => { setStatus('ready'); setIsPlaying(false); };
-    const onResize = () => setResolution({ width: video.videoWidth, height: video.videoHeight });
+    const ac = new AbortController();
+    const { signal } = ac;
 
-    video.addEventListener('play', onPlay);
-    video.addEventListener('pause', onPause);
-    video.addEventListener('resize', onResize);
-
-    return () => {
-      video.removeEventListener('play', onPlay);
-      video.removeEventListener('pause', onPause);
-      video.removeEventListener('resize', onResize);
+    const updatePlaying = (playing: boolean) => {
+      useVideoStore.getState().setIsPlaying(playing);
+      const state = useVideoStore.getState();
+      if (playing) {
+        state.setStatus('playing');
+      } else if (state.status === 'playing') {
+        state.setStatus('ready');
+      }
     };
-  }, [videoRef, setIsPlaying, setResolution]);
 
-  return { status, errorMsg, devices };
+    const updateResolution = () => {
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        useVideoStore.getState().setResolution({ width: video.videoWidth, height: video.videoHeight });
+      } else {
+        useVideoStore.getState().setResolution(null);
+      }
+    };
+
+    video.addEventListener('playing', () => updatePlaying(true), { signal });
+    video.addEventListener('pause', () => updatePlaying(false), { signal });
+    video.addEventListener('loadedmetadata', updateResolution, { signal });
+    video.addEventListener('resize', updateResolution, { signal });
+    
+    video.addEventListener('emptied', () => {
+      useVideoStore.getState().setIsPlaying(false);
+      useVideoStore.getState().setResolution(null);
+    }, { signal });
+
+    return () => ac.abort();
+  }, [video]);
 }

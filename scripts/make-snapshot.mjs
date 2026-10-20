@@ -9,9 +9,11 @@ import { spawnSync } from 'node:child_process';
 const root = process.cwd();
 const OUT = 'snapshot.txt';
 const ROOT_FILES = ['package.json', 'next.config.ts', 'tsconfig.json', 'vitest.config.ts', 'eslint.config.mjs', '.gitignore'];
-const SCAN_DIRS = ['src', 'scripts'];
-const EXT = /\.(ts|tsx|mjs|js|css|json)$/;
-const SKIP_DIRS = new Set(['node_modules', '.next', '.git', 'public']);
+const SCAN_DIRS = ['src', 'scripts', 'server', 'config', 'infra', 'docs'];
+const EXT = /\.(ts|tsx|mjs|js|css|json|py|yaml|yml|toml|md)$|^(requirements.*\.txt|Dockerfile|\.env\.example)$/;
+// Файлы с паролями камер и секретами в снапшот НЕ попадают
+const SKIP_FILES = new Set(['mediamtx.yml', '.env', '.env.local', 'snapshot.txt']);
+const SKIP_DIRS = new Set(['node_modules', '.next', '.git', 'public', '.venv', 'venv', '__pycache__', '.pytest_cache', 'data', 'runs', 'weights']);
 const MAX_CHECK_OUTPUT = 12000;
 
 if (!existsSync(join(root, 'package.json'))) {
@@ -24,7 +26,7 @@ function walk(dir, acc = []) {
     const p = join(dir, name);
     const st = statSync(p);
     if (st.isDirectory()) { if (!SKIP_DIRS.has(name)) walk(p, acc); }
-    else if (EXT.test(name)) acc.push(p);
+    else if (EXT.test(name) && !SKIP_FILES.has(name)) acc.push(p);
   }
   return acc;
 }
@@ -67,6 +69,7 @@ if (!process.argv.includes('--no-checks')) {
   parts.push(run('typecheck', 'npx tsc --noEmit --pretty false'));
   parts.push(run('lint', 'npx eslint . --ignore-pattern "public/**"'));
   parts.push(run('test', 'npx vitest run'));
+  if (existsSync(join(root, 'server'))) parts.push(run('pytest (server)', 'python -m pytest -q server'));
 }
 
 writeFileSync(join(root, OUT), parts.join('\n'), 'utf8');

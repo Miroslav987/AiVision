@@ -1,16 +1,37 @@
+// src/components/video/SourcePicker.tsx
 "use client";
 
-import React, { useRef, useEffect } from 'react';
-import { Camera, FileVideo, Link, Upload } from 'lucide-react';
+import React, { useRef, useState, useEffect } from 'react';
+import { Camera, FileVideo, Link, Upload, PlayCircle } from 'lucide-react';
 import { useVideoStore } from '@/store/videoStore';
-import { useVideoSource } from '@/hooks/useVideoSource';
+import { useVideoSource } from '@/hooks/useVideoSource'; // Теперь импортируем как функцию, не хук с возвратом состояния
+import { useToastStore } from '@/store/toastStore';
 
-export function SourcePicker({ videoRef }: { videoRef: React.RefObject<HTMLVideoElement | null> }) {
-  const { sourceType, setSourceType, sourceUrl, setSourceUrl, setDeviceId, deviceId } = useVideoStore();
-  const { devices, errorMsg, status } = useVideoSource(videoRef);
+export function SourcePicker() {
+  const { 
+    videoEl, sourceType, setSourceType, sourceUrl, setSourceUrl, deviceId, setDeviceId, 
+    devices, status, errorMsg, setStatus
+  } = useVideoStore((s) => ({
+    videoEl: s.videoEl,
+    sourceType: s.sourceType,
+    setSourceType: s.setSourceType,
+    sourceUrl: s.sourceUrl,
+    setSourceUrl: s.setSourceUrl,
+    deviceId: s.deviceId,
+    setDeviceId: s.setDeviceId,
+    devices: s.devices,
+    status: s.status,
+    errorMsg: s.errorMsg,
+    setStatus: s.setStatus,
+  }));
+  const { addToast } = useToastStore();
+
+  useVideoSource(videoEl); // Передаем videoEl напрямую
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [localUrl, setLocalUrl] = useState(''); // Для черновика ввода URL
 
-  // Исправление 1: Очистка ObjectURL при размонтировании или смене
+  // Очистка ObjectURL при размонтировании или смене
   useEffect(() => {
     return () => {
       if (sourceUrl && sourceUrl.startsWith('blob:')) {
@@ -22,39 +43,94 @@ export function SourcePicker({ videoRef }: { videoRef: React.RefObject<HTMLVideo
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (sourceUrl && sourceUrl.startsWith('blob:')) URL.revokeObjectURL(sourceUrl);
       setSourceUrl(URL.createObjectURL(file));
+      e.target.value = ''; // Сброс, чтобы можно было снова выбрать тот же файл
+    }
+  };
+
+  const handleUrlSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (localUrl.trim()) {
+      setSourceUrl(localUrl.trim());
+    } else {
+      addToast('warning', 'Введите URL потока');
     }
   };
 
   return (
     <div className="bg-bg-surface border border-border-subtle p-3 rounded-lg flex flex-col gap-3">
       <div className="flex gap-2">
-        <button onClick={() => setSourceType('camera')} className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm font-medium transition-colors ${sourceType === 'camera' ? 'bg-accent text-white' : 'bg-bg-base text-text-muted hover:text-text-main'}`}><Camera size={16} /> Камера</button>
-        <button onClick={() => setSourceType('file')} className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm font-medium transition-colors ${sourceType === 'file' ? 'bg-accent text-white' : 'bg-bg-base text-text-muted hover:text-text-main'}`}><FileVideo size={16} /> Файл</button>
-        <button onClick={() => setSourceType('url')} className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm font-medium transition-colors ${sourceType === 'url' ? 'bg-accent text-white' : 'bg-bg-base text-text-muted hover:text-text-main'}`}><Link size={16} /> Поток</button>
+        <button 
+          onClick={() => setSourceType('camera')} 
+          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm font-medium transition-colors ${sourceType === 'camera' ? 'bg-accent text-white' : 'bg-bg-base text-text-muted hover:text-text-main'}`}
+          aria-pressed={sourceType === 'camera'}
+        >
+          <Camera size={16} /> Камера
+        </button>
+        <button 
+          onClick={() => setSourceType('file')} 
+          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm font-medium transition-colors ${sourceType === 'file' ? 'bg-accent text-white' : 'bg-bg-base text-text-muted hover:text-text-main'}`}
+          aria-pressed={sourceType === 'file'}
+        >
+          <FileVideo size={16} /> Файл
+        </button>
+        <button 
+          onClick={() => setSourceType('url')} 
+          className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded text-sm font-medium transition-colors ${sourceType === 'url' ? 'bg-accent text-white' : 'bg-bg-base text-text-muted hover:text-text-main'}`}
+          aria-pressed={sourceType === 'url'}
+        >
+          <Link size={16} /> Поток
+        </button>
       </div>
 
       <div className="flex items-center gap-2">
         {sourceType === 'camera' && (
-          <select className="flex-1 bg-bg-base border border-border-subtle rounded px-3 py-2 text-sm text-text-main focus:outline-none focus:border-accent" value={deviceId || ''} onChange={(e) => setDeviceId(e.target.value)}>
-            {devices.map(d => <option key={d.deviceId} value={d.deviceId}>{d.label || 'Неизвестная камера'}</option>)}
-            {devices.length === 0 && <option value="">Камеры не найдены</option>}
+          <select 
+            className="flex-1 bg-bg-base border border-border-subtle rounded px-3 py-2 text-sm text-text-main focus:outline-none focus:border-accent" 
+            value={deviceId || ''} 
+            onChange={(e) => setDeviceId(e.target.value)}
+          >
+            <option value="">Камера по умолчанию</option>
+            {devices.map((d, i) => (
+              <option key={d.deviceId} value={d.deviceId}>{d.label || `Камера ${i + 1}`}</option>
+            ))}
+            {devices.length === 0 && <option value="" disabled>Камеры не найдены</option>}
           </select>
         )}
         {sourceType === 'file' && (
           <div className="flex-1 flex items-center gap-2">
-            <input type="file" ref={fileInputRef} className="hidden" accept="video/mp4,video/webm,video/quicktime" onChange={handleFileChange} />
-            <button onClick={() => fileInputRef.current?.click()} className="flex-1 flex items-center justify-center gap-2 bg-bg-base border border-border-subtle px-3 py-2 rounded text-sm text-text-main hover:border-accent"><Upload size={16} /> Выбрать видео</button>
+            <input type="file" ref={fileInputRef} className="hidden" accept="video/*" onChange={handleFileChange} />
+            <button 
+              onClick={() => fileInputRef.current?.click()} 
+              className="flex-1 flex items-center justify-center gap-2 bg-bg-base border border-border-subtle px-3 py-2 rounded text-sm text-text-main hover:border-accent"
+            >
+              <Upload size={16} /> Выбрать видео
+            </button>
           </div>
         )}
         {sourceType === 'url' && (
-          <input type="text" placeholder="URL (mp4, m3u8...)" className="flex-1 bg-bg-base border border-border-subtle rounded px-3 py-2 text-sm text-text-main focus:outline-none focus:border-accent" onBlur={(e) => setSourceUrl(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && setSourceUrl((e.target as HTMLInputElement).value)} />
+          <form onSubmit={handleUrlSubmit} className="flex-1 flex gap-2">
+            <input 
+              type="text" 
+              placeholder="URL (mp4, m3u8...)" 
+              className="flex-1 bg-bg-base border border-border-subtle rounded px-3 py-2 text-sm text-text-main focus:outline-none focus:border-accent" 
+              value={localUrl}
+              onChange={(e) => setLocalUrl(e.target.value)}
+            />
+            <button type="submit" className="bg-accent text-white px-3 py-2 rounded flex items-center gap-1 hover:bg-accent/80 transition-colors">
+              <PlayCircle size={16} /> Открыть
+            </button>
+          </form>
         )}
       </div>
 
-      {errorMsg && <div className="text-danger text-xs font-medium px-1">⚠️ {errorMsg}</div>}
-      {status === 'requesting' && <div className="text-text-muted text-xs px-1">Загрузка источника...</div>}
+      {errorMsg && <div role="alert" className="text-danger text-xs font-medium px-1">⚠️ {errorMsg}</div>}
+      {status === 'requesting' && <div className="text-text-muted text-xs px-1">Подключение источника...</div>}
+      {sourceType === 'url' && !sourceUrl && (
+        <div className="text-text-muted text-xs px-1 mt-1">
+          RTSP браузер не воспроизводит: ретранслируйте поток в HLS или WebRTC (например, через MediaMTX).
+        </div>
+      )}
     </div>
   );
 }

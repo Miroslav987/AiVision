@@ -1,3 +1,4 @@
+
 {
   "name": "visiondesk",
   "version": "0.1.0",
@@ -9,7 +10,8 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "postinstall": "node scripts/copy-ort-wasm.mjs"
+    "postinstall": "node scripts/copy-ort-wasm.mjs",
+    "snapshot": "node scripts/make-snapshot.mjs"
   },
   "dependencies": {
     "@tensorflow/tfjs": "^4.22.0",
