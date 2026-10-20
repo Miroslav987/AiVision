@@ -1,60 +1,64 @@
-import { Detection } from '@/types/inference';
-import { PreprocessResult } from '../preprocess';
+import { Detection, Labels } from '@/types/inference';
 import { DecoderConfig } from '@/types/config';
+import { FrameTransform, modelBoxToFrame } from '../geometry';
 import { nonMaxSuppression } from './nms';
 
-/**
- * Декодер для YOLOv5.
- * Ожидаемый вход: [1, anchors, 5 + classes]
- */
 export function decodeYOLOv5(
   output: Float32Array,
-  shape: number[],
-  prep: PreprocessResult,
+  shape: readonly number[],
+  t: FrameTransform,
   config: DecoderConfig,
-  labels?: Record<number, string>
+  labels?: Labels
 ): Detection[] {
-  const anchors = shape[1];
-  const features = shape[2];
+  if (shape.length !== 3) {
+    throw new Error(`Неожиданная форма тензора для YOLOv5: [${shape.join(', ')}]. Ожидалось [1, N, 5+C].`);
+  }
+
+  const [, anchors, features] = shape;
   const numClasses = features - 5;
+
+  if (numClasses < 1) {
+    throw new Error(`Некорректное число классов: ${numClasses} (форма [${shape.join(', ')}]).`);
+  }
+
   const detections: Detection[] = [];
+  const classFilterSet = config.classFilter.length > 0 ? new Set(config.classFilter) : null;
 
   for (let a = 0; a < anchors; a++) {
-    const offset = a * features;
-    const objConf = output[offset + 4];
-    
-    if (objConf < config.confidenceThreshold) continue;
+    const baseIdx = a * features;
+    const objectness = output[baseIdx + 4];
 
-    let maxClassConf = 0;
+    if (objectness < config.confidenceThreshold) continue;
+
+    let maxClassProb = 0;
     let classId = -1;
-    
+
     for (let c = 0; c < numClasses; c++) {
-      const conf = output[offset + 5 + c];
-      if (conf > maxClassConf) {
-        maxClassConf = conf;
+      const prob = output[baseIdx + 5 + c];
+      if (prob > maxClassProb) {
+        maxClassProb = prob;
         classId = c;
       }
     }
 
-    const score = objConf * maxClassConf;
+    const score = objectness * maxClassProb;
+
     if (score < config.confidenceThreshold) continue;
-    if (config.classFilter.length > 0 && !config.classFilter.includes(classId)) continue;
+    if (classFilterSet && !classFilterSet.has(classId)) continue;
 
-    const cx = output[offset + 0];
-    const cy = output[offset + 1];
-    const w  = output[offset + 2];
-    const h  = output[offset + 3];
+    const cx = output[baseIdx + 0];
+    const cy = output[baseIdx + 1];
+    const w = output[baseIdx + 2];
+    const h = output[baseIdx + 3];
 
-    const origX = ((cx - w / 2) - prep.padX) / prep.scale;
-    const origY = ((cy - h / 2) - prep.padY) / prep.scale;
-    const origW = w / prep.scale;
-    const origH = h / prep.scale;
+    const modelBox = { x: cx - w / 2, y: cy - h / 2, w, h };
+    const frameBox = modelBoxToFrame(modelBox, t);
 
     detections.push({
       classId,
-      className: labels?.[classId] || `Class ${classId}`,
+      className: labels?.[classId] ?? `Class ${classId}`,
       confidence: score,
-      box: { x: origX, y: origY, w: origW, h: origH }
+      box: frameBox
     });
   }
 

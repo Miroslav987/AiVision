@@ -1,14 +1,26 @@
 import { RawTensorResult } from '@/types/inference';
 
-export function extractRawTensors(tensors: Record<string, { shape: readonly number[]; data: Float32Array | Int32Array }>): Record<string, RawTensorResult> {
+export function extractRawTensors(
+  tensors: Record<string, { dims: readonly number[]; type: string; data: ArrayLike<number | bigint> }>
+): Record<string, RawTensorResult> {
   const result: Record<string, RawTensorResult> = {};
+
   for (const [name, tensor] of Object.entries(tensors)) {
-    // Копируем первые 100 значений, чтобы не забивать память UI
-    const values = tensor.data.slice(0, Math.min(tensor.data.length, 100));
+    const total = tensor.data.length;
+    const sliceLen = Math.min(total, 64);
+    const values = new Array<number>(sliceLen);
+
+    for (let i = 0; i < sliceLen; i++) {
+      values[i] = Number(tensor.data[i]);
+    }
+
     result[name] = {
-      shape: Array.from(tensor.shape),
-      values: values
+      shape: Array.from(tensor.dims),
+      values,
+      total,
+      type: tensor.type
     };
   }
+
   return result;
 }
