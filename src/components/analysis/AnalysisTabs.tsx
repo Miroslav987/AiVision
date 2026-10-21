@@ -21,15 +21,17 @@ export function AnalysisTabs({ videoNode }: { videoNode: React.ReactNode }) {
         <MetricsGrid />
       </ErrorBoundary>
 
-      <div className={`flex bg-bg-surface p-1 rounded-lg border border-border-subtle shrink-0 ${tab === 'video' ? 'hidden lg:flex' : 'flex'}`}>
+      <div className="flex bg-bg-surface p-1 rounded-lg border border-border-subtle shrink-0">
         {(['video', 'charts', 'log', 'raw'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`flex-1 text-sm font-medium py-1.5 rounded-md transition-colors ${
               tab === t
-                ? 'bg-bg-base text-text-main shadow-sm' 
-                : 'text-text-muted hover:text-text-main'
+                ? 'bg-bg-base text-text-main shadow-sm'
+                : t === 'charts' && tab === 'video'
+                  ? 'text-text-muted lg:bg-bg-base lg:text-text-main lg:shadow-sm'
+                  : 'text-text-muted hover:text-text-main'
             } ${t === 'video' ? 'lg:hidden' : ''}`}
           >
             {t === 'video' ? 'Видео' : t === 'charts' ? 'Графики' : t === 'log' ? 'Журнал' : 'Сырой вывод'}
@@ -38,7 +40,8 @@ export function AnalysisTabs({ videoNode }: { videoNode: React.ReactNode }) {
       </div>
 
       <div className={`${tab === 'video' ? 'hidden lg:block' : 'block'} flex-[2] min-h-[220px] bg-bg-surface border border-border-subtle rounded-xl p-4`}>
-        {tab === 'charts' && <ErrorBoundary title="Графики"><LiveCharts /></ErrorBoundary>}
+        {/* На десктопе вкладки «Видео» нет — по умолчанию показываем графики */}
+        {(tab === 'charts' || tab === 'video') && <ErrorBoundary title="Графики"><LiveCharts /></ErrorBoundary>}
         {tab === 'log' && <ErrorBoundary title="Журнал"><EventLog /></ErrorBoundary>}
         {tab === 'raw' && <ErrorBoundary title="Сырой вывод"><RawOutputViewer /></ErrorBoundary>}
       </div>

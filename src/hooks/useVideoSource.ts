@@ -146,8 +146,6 @@ export function useVideoSource(video: HTMLVideoElement | null): void {
       }
     };
 
-    cleanup();
-
     if (sourceType === 'camera') {
       setupCamera();
     } else if (sourceUrl) {

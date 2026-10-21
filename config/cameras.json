@@ -1,0 +1,32 @@
+{
+  "cameras": [
+    {
+      "id": "cam1",
+      "name": "Зал у окна",
+      "role": "hall",
+      "analyzeFps": 3,
+      "enabled": true
+    },
+    {
+      "id": "cam2",
+      "name": "Зал у барной стойки",
+      "role": "hall",
+      "analyzeFps": 3,
+      "enabled": true
+    },
+    {
+      "id": "cam3",
+      "name": "Проход на кухню",
+      "role": "pass",
+      "analyzeFps": 3,
+      "enabled": true
+    },
+    {
+      "id": "cam4",
+      "name": "Главный вход",
+      "role": "entrance",
+      "analyzeFps": 3,
+      "enabled": true
+    }
+  ]
+}

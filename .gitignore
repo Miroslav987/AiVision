@@ -43,3 +43,4 @@ next-env.d.ts
 
 /public/ort/
 snapshot.txt
+infra/mediamtx.yml

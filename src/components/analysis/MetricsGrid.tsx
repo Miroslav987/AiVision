@@ -10,7 +10,6 @@ export function MetricsGrid() {
   const timings = useInferenceStore((s) => s.timings);
   const lastResult = useInferenceStore((s) => s.lastResult);
   const modelBackend = useModelStore((s) => s.modelInfo?.backend);
-  const modelBackendNote = useModelStore((s) => s.modelInfo?.backendNote);
 
 
   const totalLatency = timings ? timings.preprocessMs + timings.inferenceMs + timings.postprocessMs : 0;
@@ -34,16 +33,16 @@ export function MetricsGrid() {
         valueColor={getLatencyColor(totalLatency)} 
       />
       <MetricCard title="Объектов в кадре" value={objCount.toString()} />
-      <MetricCard title="Бэкенд" value={modelBackend ? `${modelBackend.toUpperCase()}${modelBackendNote ? ` (${modelBackendNote})` : ''}` : '—'} />
+      <MetricCard title="Бэкенд" value={modelBackend ? modelBackend.toUpperCase() : '—'} />
     </div>
   );
 }
 
 function MetricCard({ title, value, valueColor = 'text-text-main' }: { title: string, value: string, valueColor?: string }) {
   return (
-    <div className="bg-bg-surface border border-border-subtle rounded-xl p-3 flex flex-col justify-center">
+    <div className="bg-bg-surface border border-border-subtle rounded-xl p-3 flex flex-col justify-center min-w-0">
       <div className="text-xs text-text-muted font-medium mb-1">{title}</div>
-      <div className={`text-xl font-mono tabular-nums tracking-tight ${valueColor}`}>{value}</div>
+      <div className={`text-xl font-mono tabular-nums tracking-tight truncate ${valueColor}`} title={value}>{value}</div>
     </div>
   );
 }
