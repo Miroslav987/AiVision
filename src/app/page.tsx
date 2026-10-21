@@ -5,7 +5,6 @@ import dynamic from "next/dynamic";
 import { Header } from "@/components/shared/Header";
 import { ToastContainer } from "@/components/shared/ToastContainer";
 
-// Динамические импорты для Client Components
 const VideoStageWrap = dynamic(() => import("@/components/video/VideoStage").then(m => m.VideoStage), { ssr: false });
 const PlaybackControlsWrap = dynamic(() => import("@/components/video/PlaybackControls").then(m => m.PlaybackControls), { ssr: false });
 const SourcePickerWrap = dynamic(() => import("@/components/video/SourcePicker").then(m => m.SourcePicker), { ssr: false });
@@ -20,11 +19,11 @@ export default function DashboardPage() {
       <Header />
       <ToastContainer />
       <IntegrationEngineWrap />
-      <DevPanelWrap />
+      {process.env.NODE_ENV === 'development' && <DevPanelWrap />}
 
       <main className="flex-1 flex flex-col lg:flex-row overflow-hidden p-2 lg:p-4 gap-4">
         <section className="flex-[6.5] min-w-0 flex flex-col gap-4 overflow-hidden">
-          <div className="hidden lg:flex flex-col gap-3 shrink-0">
+          <div className="flex flex-col gap-3 shrink-0">
             <SourcePickerWrap />
             <PlaybackControlsWrap />
           </div>
@@ -33,7 +32,7 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <section className="flex-[3.5] min-w-0 flex flex-col overflow-hidden">
+        <section className="flex-[3.5] min-w-0 flex flex-col overflow-y-auto">
           <ModelPanelWrap />
         </section>
       </main>

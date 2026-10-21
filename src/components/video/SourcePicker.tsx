@@ -4,34 +4,29 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Camera, FileVideo, Link, Upload, PlayCircle } from 'lucide-react';
 import { useVideoStore } from '@/store/videoStore';
-import { useVideoSource } from '@/hooks/useVideoSource'; // Теперь импортируем как функцию, не хук с возвратом состояния
+import { useVideoSource } from '@/hooks/useVideoSource';
 import { useToastStore } from '@/store/toastStore';
 
 export function SourcePicker() {
-  const { 
-    videoEl, sourceType, setSourceType, sourceUrl, setSourceUrl, deviceId, setDeviceId, 
-    devices, status, errorMsg, setStatus
-  } = useVideoStore((s) => ({
-    videoEl: s.videoEl,
-    sourceType: s.sourceType,
-    setSourceType: s.setSourceType,
-    sourceUrl: s.sourceUrl,
-    setSourceUrl: s.setSourceUrl,
-    deviceId: s.deviceId,
-    setDeviceId: s.setDeviceId,
-    devices: s.devices,
-    status: s.status,
-    errorMsg: s.errorMsg,
-    setStatus: s.setStatus,
-  }));
+  // Исправление: достаем значения отдельными селекторами, чтобы избежать бесконечного ре-рендера
+  const videoEl = useVideoStore((s) => s.videoEl);
+  const sourceType = useVideoStore((s) => s.sourceType);
+  const setSourceType = useVideoStore((s) => s.setSourceType);
+  const sourceUrl = useVideoStore((s) => s.sourceUrl);
+  const setSourceUrl = useVideoStore((s) => s.setSourceUrl);
+  const deviceId = useVideoStore((s) => s.deviceId);
+  const setDeviceId = useVideoStore((s) => s.setDeviceId);
+  const devices = useVideoStore((s) => s.devices);
+  const status = useVideoStore((s) => s.status);
+  const errorMsg = useVideoStore((s) => s.errorMsg);
+
   const { addToast } = useToastStore();
 
-  useVideoSource(videoEl); // Передаем videoEl напрямую
+  useVideoSource(videoEl);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [localUrl, setLocalUrl] = useState(''); // Для черновика ввода URL
+  const [localUrl, setLocalUrl] = useState('');
 
-  // Очистка ObjectURL при размонтировании или смене
   useEffect(() => {
     return () => {
       if (sourceUrl && sourceUrl.startsWith('blob:')) {
@@ -44,7 +39,7 @@ export function SourcePicker() {
     const file = e.target.files?.[0];
     if (file) {
       setSourceUrl(URL.createObjectURL(file));
-      e.target.value = ''; // Сброс, чтобы можно было снова выбрать тот же файл
+      e.target.value = ''; 
     }
   };
 

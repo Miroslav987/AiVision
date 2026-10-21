@@ -1,62 +1,35 @@
 // src/components/model/ModelDropzone.tsx
 "use client";
-import React, { useState } from 'react';
-import { UploadCloud } from 'lucide-react';
-import { useToastStore } from '@/store/toastStore';
+import React, { useRef, useState } from 'react';
+import { UploadCloud, Loader2 } from 'lucide-react';
 import { useModelStore } from '@/store/modelStore';
-import { getGlobalInferenceClient } from '@/lib/inference/clientSingleton';
-import { ModelFormat, EngineConfig } from '@/types/inference';
+import { handleModelFiles } from '@/lib/inference/modelLoader';
 
 export function ModelDropzone() {
   const [isDragging, setIsDragging] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [progressMsg, setProgressMsg] = useState('');
-  const { addToast } = useToastStore();
-  const { setActiveModel, config } = useModelStore();
+  const loading = useModelStore((s) => s.loading);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFiles = async (files: FileList) => {
-    const fileArray = Array.from(files);
-    if (fileArray.length === 0) return;
-
-    const onnxFile = fileArray.find(f => f.name.endsWith('.onnx'));
-    let format: ModelFormat = 'unsupported';
-
-    if (onnxFile) {
-      format = 'onnx';
-    } else {
-      addToast('error', 'Пока поддерживается только загрузка .onnx моделей.');
-      return;
-    }
-
-    try {
-      setIsUploading(true);
-      const client = getGlobalInferenceClient();
-      client.onProgress = (p, msg) => setProgressMsg(`${p}% - ${msg}`);
-      
-      // На этапе загрузки 'auto' еще не разрешен, но мы кастуем для прохождения типа, 
-      // воркеру config.task на этапе загрузки не важен.
-      const info = await client.load([onnxFile], format, config as EngineConfig);
-      setActiveModel(info.id, info);
-      addToast('success', `Модель ${info.name} успешно загружена и готова к инференсу!`);
-    } catch (e) {
-      addToast('error', `Ошибка загрузки модели: ${e instanceof Error ? e.message : 'Неизвестная ошибка'}`);
-    } finally {
-      setIsUploading(false);
-      setProgressMsg('');
-    }
+  const processFiles = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    handleModelFiles(Array.from(files));
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault(); 
     setIsDragging(false); 
-    handleFiles(e.dataTransfer.files);
+    if (!loading) processFiles(e.dataTransfer.files);
   };
 
-  if (isUploading) {
+  if (loading) {
     return (
       <div className="border-2 border-accent border-dashed rounded-xl p-6 text-center bg-accent/5 flex flex-col items-center justify-center gap-3">
-        <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin"></div>
-        <div className="text-sm font-medium text-text-main">{progressMsg || 'Загрузка...'}</div>
+        <Loader2 className="w-8 h-8 text-accent animate-spin" />
+        <div className="text-sm font-medium text-text-main">{loading.message}</div>
+        <div className="w-full max-w-[200px] h-1 bg-border-subtle rounded-full overflow-hidden mt-1">
+          <div className="h-full bg-accent transition-all duration-300" style={{ width: `${loading.progress}%` }} />
+        </div>
       </div>
     );
   }
@@ -73,12 +46,22 @@ export function ModelDropzone() {
       <div className="flex items-center gap-2 text-text-muted"><UploadCloud size={32} /></div>
       <div>
         <p className="text-sm font-medium text-text-main">Перетащите файлы модели сюда</p>
-        <p className="text-xs text-text-muted mt-1 max-w-xs">Поддерживается: .onnx</p>
+        <p className="text-xs text-text-muted mt-1 max-w-xs">.onnx + метки (.txt / .json) + конфигурация (.json)</p>
       </div>
-      <label className="mt-2 bg-bg-base border border-border-subtle text-text-main text-xs px-4 py-2 rounded cursor-pointer hover:border-accent transition-colors">
+      <button 
+        onClick={() => fileInputRef.current?.click()}
+        className="mt-2 bg-bg-base border border-border-subtle text-text-main text-xs px-4 py-2 rounded hover:border-accent transition-colors"
+      >
         Выбрать файлы
-        <input type="file" multiple className="hidden" onChange={(e) => e.target.files && handleFiles(e.target.files)} />
-      </label>
+      </button>
+      <input 
+        type="file" 
+        multiple 
+        ref={fileInputRef}
+        accept=".onnx,.txt,.json"
+        className="hidden" 
+        onChange={(e) => processFiles(e.target.files)} 
+      />
     </div>
   );
 }

@@ -1,3 +1,4 @@
+// src/components/shared/Header.tsx
 "use client";
 import React from 'react';
 import { useModelStore } from '@/store/modelStore';
@@ -29,8 +30,9 @@ export function Header() {
           <div className={`w-2.5 h-2.5 rounded-full ${statusColor} shadow-[0_0_8px_currentColor] opacity-80`} />
           <span className="text-text-muted font-medium w-28">{statusText}</span>
         </div>
-        <div className="font-mono tabular-nums text-text-main bg-bg-base px-2 py-1 rounded border border-border-subtle">
-          {fpsInference} FPS
+        <div className="font-mono tabular-nums text-text-main bg-bg-base px-2 py-1 rounded border border-border-subtle flex items-center gap-2">
+          <span>{fpsInference} FPS</span>
+          {modelInfo && <span className="text-text-muted border-l border-border-subtle pl-2">{modelInfo.backend.toUpperCase()}</span>}
         </div>
       </div>
     </header>

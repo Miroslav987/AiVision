@@ -11,17 +11,13 @@ export function DevPanel() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      // Пример получения памяти, если используется @tensorflow/tfjs
-      // Так как tf загружен только в воркере, на клиенте мы можем измерить только общий heap, если браузер позволяет.
-      const perf = performance as unknown as { memory?: { usedJSHeapSize: number } };
+      const perf = performance as Performance & { memory?: { usedJSHeapSize: number } };
       if (perf.memory) {
         setMemory(`${Math.round(perf.memory.usedJSHeapSize / 1048576)} MB`);
       }
     }, 1000);
     return () => clearInterval(interval);
   }, []);
-
-  if (process.env.NODE_ENV !== 'development') return null;
 
   const handleReset = () => {
     resetGlobalInferenceClient();

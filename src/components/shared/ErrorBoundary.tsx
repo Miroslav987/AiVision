@@ -2,17 +2,34 @@
 "use client";
 import React, { Component, ReactNode } from 'react';
 
-export class ErrorBoundary extends Component<{children: ReactNode, title: string}, {hasError: boolean, error: Error | null}> {
-  state: {hasError: boolean, error: Error | null} = { hasError: false, error: null };
+interface Props {
+  children: ReactNode;
+  title: string;
+}
+
+interface State {
+  error: Error | null;
+}
+
+export class ErrorBoundary extends Component<Props, State> {
+  state: State = { error: null };
   
-  static getDerivedStateFromError(error: Error) { return { hasError: true, error }; }
+  static getDerivedStateFromError(error: Error): State { 
+    return { error }; 
+  }
   
   render() {
-    if (this.state.hasError) {
+    if (this.state.error) {
       return (
-        <div className="p-4 bg-danger/10 border border-danger/20 rounded-xl text-danger text-sm">
-          <p className="font-bold mb-1">{this.props.title} сломался</p>
-          <p className="font-mono text-xs opacity-80">{this.state.error?.message}</p>
+        <div className="p-4 bg-danger/10 border border-danger/20 rounded-xl flex flex-col items-start gap-2 text-danger text-sm">
+          <p className="font-bold">{this.props.title}: ошибка</p>
+          <p className="font-mono text-xs opacity-80">{this.state.error.message}</p>
+          <button 
+            onClick={() => this.setState({ error: null })}
+            className="mt-1 text-xs px-3 py-1 bg-danger/20 hover:bg-danger/30 rounded transition-colors"
+          >
+            Повторить
+          </button>
         </div>
       );
     }
